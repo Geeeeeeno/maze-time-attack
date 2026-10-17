@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>ねこねこネオン迷路</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <header class="hud" id="hud" hidden>
+      <div class="hud-row">
+        <span id="stageLabel">ステージ 1/5</span>
+        <span id="timerLabel">⏱ 60</span>
+        <span id="scoreLabel">スコア 0</span>
+      </div>
+      <div class="hud-row">
+        <span id="keysLabel">★ 0/3</span>
+        <button type="button" id="muteBtn" class="icon-btn" aria-label="ミュート切替">🔊</button>
+      </div>
+    </header>
+
+    <main id="screens">
+      <section id="titleScreen" class="screen active">
+        <div class="glow-bg"></div>
+        <h1 class="title">ねこねこ<br>ネオン迷路</h1>
+        <p class="tagline">夜の迷路をかけぬけろ！</p>
+        <div class="records">
+          <p>ベストクリアタイム: <strong id="bestTimeDisplay">---</strong></p>
+          <p>ハイスコア: <strong id="highScoreDisplay">0</strong></p>
+        </div>
+        <button type="button" id="startBtn" class="primary-btn">はじめる</button>
+        <p class="hint">矢印キー / WASD で移動<br>スマホは画面下の十字ボタン</p>
+      </section>
+
+      <section id="stageScreen" class="screen">
+        <p class="stage-announce" id="stageAnnounce">ステージ 1</p>
+        <p class="stage-sub">星を3つ集めて扉を開けよう</p>
+      </section>
+
+      <section id="gameScreen" class="screen">
+        <div class="canvas-wrap">
+          <canvas id="gameCanvas" width="480" height="480"></canvas>
+        </div>
+        <div class="dpad" id="dpad" aria-label="移動ボタン">
+          <button type="button" class="dpad-btn" data-dir="up" aria-label="上">▲</button>
+          <div class="dpad-mid">
+            <button type="button" class="dpad-btn" data-dir="left" aria-label="左">◀</button>
+            <button type="button" class="dpad-btn" data-dir="right" aria-label="右">▶</button>
+          </div>
+          <button type="button" class="dpad-btn" data-dir="down" aria-label="下">▼</button>
+        </div>
+      </section>
+
+      <section id="resultScreen" class="screen">
+        <h2 id="resultTitle">ゲームオーバー</h2>
+        <p id="resultMessage"></p>
+        <div class="records result-stats">
+          <p>スコア: <strong id="resultScore">0</strong></p>
+          <p>クリアタイム: <strong id="resultTime">---</strong></p>
+        </div>
+        <button type="button" id="restartBtn" class="primary-btn">もう一度</button>
+        <button type="button" id="titleBtn" class="secondary-btn">タイトルへ</button>
+      </section>
+    </main>
+  </div>
+  <script src="game.js"></script>
+</body>
+</html>
