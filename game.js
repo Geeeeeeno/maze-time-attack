@@ -67,6 +67,7 @@
     animId: 0,
     cellSize: 24,
     bobPhase: 0,
+    lastBump: null,
   };
 
   var audioCtx = null;
@@ -77,7 +78,7 @@
       if (AC) audioCtx = new AC();
     }
     if (audioCtx && audioCtx.state === "suspended") {
-      audioCtx.resume();
+      audioCtx.resume().catch(function () {});
     }
   }
 
@@ -152,21 +153,50 @@
     return m + ":" + (r < 10 ? "0" : "") + r;
   }
 
+  function storageGet(key) {
+    try {
+      return localStorage.getItem(key);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function storageSet(key, value) {
+    try {
+      localStorage.setItem(key, value);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function readRecordNumber(key) {
+    var raw = storageGet(key);
+    if (raw == null || raw === "") return null;
+    var n = Number(raw);
+    if (!isFinite(n) || n < 0) return null;
+    return n;
+  }
+
   function loadRecords() {
-    var best = localStorage.getItem(STORAGE_BEST_TIME);
-    var high = localStorage.getItem(STORAGE_HIGH_SCORE);
-    els.bestTimeDisplay.textContent = best != null ? formatTime(Number(best)) : "---";
-    els.highScoreDisplay.textContent = high != null ? String(Number(high)) : "0";
+    var best = readRecordNumber(STORAGE_BEST_TIME);
+    var high = readRecordNumber(STORAGE_HIGH_SCORE);
+    els.bestTimeDisplay.textContent = best != null ? formatTime(best) : "---";
+    els.highScoreDisplay.textContent = high != null ? String(Math.floor(high)) : "0";
   }
 
   function saveRecords(totalTime, score) {
-    var prevBest = localStorage.getItem(STORAGE_BEST_TIME);
-    if (prevBest == null || totalTime < Number(prevBest)) {
-      localStorage.setItem(STORAGE_BEST_TIME, String(Math.floor(totalTime)));
+    if (totalTime != null) {
+      var time = Math.floor(totalTime);
+      var prevBest = readRecordNumber(STORAGE_BEST_TIME);
+      if (isFinite(time) && time >= 0 && (prevBest == null || time < prevBest)) {
+        storageSet(STORAGE_BEST_TIME, String(time));
+      }
     }
-    var prevHigh = localStorage.getItem(STORAGE_HIGH_SCORE);
-    if (prevHigh == null || score > Number(prevHigh)) {
-      localStorage.setItem(STORAGE_HIGH_SCORE, String(score));
+    var points = Math.floor(score);
+    var prevHigh = readRecordNumber(STORAGE_HIGH_SCORE);
+    if (isFinite(points) && points >= 0 && (prevHigh == null || points > prevHigh)) {
+      storageSet(STORAGE_HIGH_SCORE, String(points));
     }
     loadRecords();
   }
@@ -217,30 +247,109 @@
     return grid;
   }
 
-  function pathCells(maze) {
+  function openingsAt(maze, x, y) {
+    var n = 0;
+    if (y > 0 && maze[y - 1][x] === 0) n++;
+    if (y + 1 < maze.length && maze[y + 1][x] === 0) n++;
+    if (x > 0 && maze[y][x - 1] === 0) n++;
+    if (x + 1 < maze[0].length && maze[y][x + 1] === 0) n++;
+    return n;
+  }
+
+  /** Cells reachable from start while the goal cell is still locked. */
+  function reachableCells(maze, start, blocked) {
+    var h = maze.length;
+    var w = maze[0].length;
+    var seen = [];
+    var y;
+    var x;
+    for (y = 0; y < h; y++) {
+      seen[y] = [];
+      for (x = 0; x < w; x++) seen[y][x] = 0;
+    }
+    var q = [{ x: start.x, y: start.y }];
+    seen[start.y][start.x] = 1;
     var cells = [];
-    for (var y = 0; y < maze.length; y++) {
-      for (var x = 0; x < maze[0].length; x++) {
-        if (maze[y][x] === 0) cells.push({ x: x, y: y });
+    var head = 0;
+    var dirs = [
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+    ];
+    while (head < q.length) {
+      var p = q[head++];
+      cells.push(p);
+      for (var i = 0; i < dirs.length; i++) {
+        var nx = p.x + dirs[i][0];
+        var ny = p.y + dirs[i][1];
+        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+        if (maze[ny][nx] !== 0) continue;
+        if (blocked && nx === blocked.x && ny === blocked.y) continue;
+        if (seen[ny][nx]) continue;
+        seen[ny][nx] = 1;
+        q.push({ x: nx, y: ny });
       }
     }
     return cells;
   }
 
-  function placeItems(maze, start, goal) {
-    var cells = pathCells(maze).filter(function (p) {
-      return !(p.x === start.x && p.y === start.y) && !(p.x === goal.x && p.y === goal.y);
-    });
-    cells = shuffle(cells);
+  function placeItems(spots) {
+    var cells = shuffle(spots);
     var items = [];
-    var i;
-    for (i = 0; i < KEYS_NEEDED && i < cells.length; i++) {
-      items.push({ x: cells[i].x, y: cells[i].y, type: "star", taken: false });
-    }
-    for (; i < KEYS_NEEDED + 3 && i < cells.length; i++) {
-      items.push({ x: cells[i].x, y: cells[i].y, type: "fish", taken: false });
+    var limit = Math.min(cells.length, KEYS_NEEDED + 3);
+    for (var i = 0; i < limit; i++) {
+      items.push({
+        x: cells[i].x,
+        y: cells[i].y,
+        type: i < KEYS_NEEDED ? "star" : "fish",
+        taken: false,
+      });
     }
     return items;
+  }
+
+  /**
+   * The door blocks the goal until 3 stars are collected, and stepping on it
+   * clears the stage. A goal with two openings hides a side branch that can
+   * never be entered — if a star lands there, the stage cannot be finished.
+   * Prefer a dead-end goal, and only place items on cells reachable while locked.
+   */
+  function createLevel(size) {
+    var start = { x: 1, y: 1 };
+    var goal = { x: size - 2, y: size - 2 };
+    var fallback = null;
+    for (var attempt = 0; attempt < 80; attempt++) {
+      var maze = generateMaze(size, size);
+      var reachable = reachableCells(maze, start, goal);
+      var spots = [];
+      var goalConnected = false;
+      for (var i = 0; i < reachable.length; i++) {
+        var p = reachable[i];
+        if (Math.abs(p.x - goal.x) + Math.abs(p.y - goal.y) === 1) goalConnected = true;
+        if (p.x === start.x && p.y === start.y) continue;
+        spots.push(p);
+      }
+      if (!goalConnected || spots.length < KEYS_NEEDED) continue;
+      var level = { maze: maze, goal: goal, items: placeItems(spots) };
+      if (!fallback || spots.length > fallback.spots) {
+        fallback = { maze: level.maze, goal: level.goal, items: level.items, spots: spots.length };
+      }
+      if (openingsAt(maze, goal.x, goal.y) === 1 && spots.length >= KEYS_NEEDED + 3) {
+        return { maze: maze, goal: goal, items: level.items };
+      }
+    }
+    if (fallback) {
+      return { maze: fallback.maze, goal: fallback.goal, items: fallback.items };
+    }
+    var mazeLast = generateMaze(size, size);
+    var reachableLast = reachableCells(mazeLast, start, goal);
+    var spotsLast = [];
+    for (var n = 0; n < reachableLast.length; n++) {
+      if (reachableLast[n].x === start.x && reachableLast[n].y === start.y) continue;
+      spotsLast.push(reachableLast[n]);
+    }
+    return { maze: mazeLast, goal: goal, items: placeItems(spotsLast) };
   }
 
   function updateHud() {
@@ -277,8 +386,9 @@
     var cfg = STAGE_CONFIG[index];
     state.cols = cfg.size;
     state.rows = cfg.size;
-    state.maze = generateMaze(cfg.size, cfg.size);
-    state.goal = { x: cfg.size - 2, y: cfg.size - 2 };
+    var level = createLevel(cfg.size);
+    state.maze = level.maze;
+    state.goal = level.goal;
     state.player = { x: 1, y: 1, drawX: 1, drawY: 1 };
     state.moving = false;
     state.moveFrom = null;
@@ -286,7 +396,8 @@
     state.facing = 1;
     state.keys = 0;
     state.doorOpen = false;
-    state.items = placeItems(state.maze, { x: 1, y: 1 }, state.goal);
+    state.items = level.items;
+    state.lastBump = null;
     state.timeLeft = cfg.time;
     state.particles = [];
     state.cellSize = canvas.width / cfg.size;
@@ -321,13 +432,24 @@
     if (state.mode !== "playing" || state.moving) return;
     var nx = state.player.x + dx;
     var ny = state.player.y + dy;
-    if (nx < 0 || ny < 0 || nx >= state.cols || ny >= state.rows) return;
-    if (state.maze[ny][nx] === 1) return;
-
-    if (nx === state.goal.x && ny === state.goal.y && !state.doorOpen) {
-      beep(150, 0.08, "square", 0.04);
+    if (nx < 0 || ny < 0 || nx >= state.cols || ny >= state.rows) {
+      state.lastBump = null;
       return;
     }
+    if (state.maze[ny][nx] === 1) {
+      state.lastBump = null;
+      return;
+    }
+
+    if (nx === state.goal.x && ny === state.goal.y && !state.doorOpen) {
+      var bumpKey = nx + "," + ny;
+      if (state.lastBump !== bumpKey) {
+        state.lastBump = bumpKey;
+        beep(150, 0.08, "square", 0.04);
+      }
+      return;
+    }
+    state.lastBump = null;
 
     if (dx !== 0) state.facing = dx > 0 ? 1 : -1;
 
@@ -437,11 +559,7 @@
     cancelAnimationFrame(state.animId);
     state.animId = 0;
     sfxFail();
-    var prevHigh = localStorage.getItem(STORAGE_HIGH_SCORE);
-    if (prevHigh == null || state.score > Number(prevHigh)) {
-      localStorage.setItem(STORAGE_HIGH_SCORE, String(state.score));
-    }
-    loadRecords();
+    saveRecords(null, state.score);
     showScreen("resultScreen");
     els.resultTitle.textContent = "ゲームオーバー";
     els.resultTitle.className = "lose";
@@ -460,15 +578,9 @@
     var dt = Math.min(0.05, Math.max(0, (now - state.lastTick) / 1000));
     state.lastTick = now;
     state.timeLeft -= dt;
+    if (state.timeLeft < 0) state.timeLeft = 0;
     state.totalElapsed += dt;
     state.bobPhase += dt * 6;
-
-    if (state.timeLeft <= 0) {
-      state.timeLeft = 0;
-      updateHud();
-      gameOver("時間切れ…もう一度挑戦しよう！");
-      return;
-    }
 
     if (state.moving && state.moveFrom && state.moveTo) {
       var t = (now - state.moveStart) / MOVE_MS;
@@ -481,8 +593,17 @@
         state.player.drawX = state.moveFrom.x + (state.moveTo.x - state.moveFrom.x) * e;
         state.player.drawY = state.moveFrom.y + (state.moveTo.y - state.moveFrom.y) * e;
       }
-    } else {
+    } else if (state.mode === "playing") {
       queueHeldMove();
+    }
+
+    if (state.mode !== "playing") return;
+
+    if (state.timeLeft <= 0) {
+      state.timeLeft = 0;
+      updateHud();
+      gameOver("時間切れ…もう一度挑戦しよう！");
+      return;
     }
 
     for (var i = state.particles.length - 1; i >= 0; i--) {
@@ -679,10 +800,19 @@
   function bindDpad() {
     var buttons = els.dpad.querySelectorAll(".dpad-btn");
 
+    els.dpad.addEventListener("contextmenu", function (ev) {
+      ev.preventDefault();
+    });
+
     buttons.forEach(function (btn) {
       var dir = btn.getAttribute("data-dir");
       var press = function (ev) {
         ev.preventDefault();
+        try {
+          btn.setPointerCapture(ev.pointerId);
+        } catch (e) {
+          /* pointer capture is unavailable for this event */
+        }
         btn.classList.add("active");
         heldPad = dir;
         ensureAudio();
@@ -690,14 +820,17 @@
         if (v) tryMove(v[0], v[1]);
       };
       var release = function (ev) {
-        ev.preventDefault();
+        if (ev) ev.preventDefault();
         btn.classList.remove("active");
         if (heldPad === dir) heldPad = null;
       };
       btn.addEventListener("pointerdown", press);
       btn.addEventListener("pointerup", release);
-      btn.addEventListener("pointerleave", release);
       btn.addEventListener("pointercancel", release);
+      btn.addEventListener("pointerleave", function (ev) {
+        if (btn.hasPointerCapture && ev && btn.hasPointerCapture(ev.pointerId)) return;
+        release(ev);
+      });
     });
   }
 
