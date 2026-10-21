@@ -374,6 +374,47 @@ body {
   margin-bottom: 1.25rem;
 }
 
+.site-footer {
+  width: 100%;
+  flex: 0 0 auto;
+  margin-top: 0.2rem;
+  text-align: center;
+  font-size: 0.68rem;
+  line-height: 1.35;
+  color: var(--muted);
+}
+
+.site-footer nav {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 0.1rem 0.75rem;
+}
+
+.site-footer a {
+  color: var(--muted);
+  text-decoration: none;
+  padding: 0.2rem 0.1rem;
+}
+
+.site-footer a:focus-visible {
+  color: var(--neon-cyan);
+  text-decoration: underline;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .site-footer a:hover {
+    color: var(--neon-cyan);
+    text-decoration: underline;
+  }
+}
+
+#app:has(#gameScreen.screen.active) .site-footer,
+#app:has(#stageScreen.screen.active) .site-footer {
+  display: none;
+}
+
 @media (min-width: 700px) {
   .dpad {
     opacity: 0.85;
