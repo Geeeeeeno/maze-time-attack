@@ -1,0 +1,94 @@
+html.legal {
+  height: auto;
+  min-height: 100%;
+  overflow: auto;
+  overscroll-behavior: auto;
+}
+
+body.legal {
+  height: auto;
+  min-height: 100dvh;
+  overflow: visible;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.legal-main {
+  width: min(40rem, 100%);
+  flex: 1 0 auto;
+  padding:
+    max(1.25rem, env(safe-area-inset-top))
+    max(1rem, env(safe-area-inset-right))
+    1.5rem
+    max(1rem, env(safe-area-inset-left));
+  line-height: 1.75;
+  text-align: left;
+}
+
+.legal-main h1 {
+  font-size: clamp(1.35rem, 5vw, 1.7rem);
+  line-height: 1.35;
+  color: var(--neon-pink);
+  text-shadow: 0 0 12px rgba(255, 79, 216, 0.45);
+  margin: 0 0 1rem;
+}
+
+.legal-main h2 {
+  font-size: 1.05rem;
+  color: var(--neon-cyan);
+  margin: 1.6rem 0 0.45rem;
+}
+
+.legal-main p,
+.legal-main li,
+.legal-main dd {
+  color: var(--text);
+  font-size: 0.95rem;
+}
+
+.legal-main ul,
+.legal-main dl {
+  margin: 0.4rem 0 0;
+  padding-left: 1.2rem;
+}
+
+.legal-main dl {
+  padding-left: 0;
+}
+
+.legal-main dt {
+  color: var(--neon-yellow);
+  font-weight: 700;
+  margin-top: 0.85rem;
+}
+
+.legal-main dd {
+  margin: 0.2rem 0 0;
+}
+
+.legal-main a {
+  color: var(--neon-cyan);
+}
+
+.legal-back {
+  margin: 0 0 1rem;
+  font-size: 0.9rem;
+}
+
+.legal-updated {
+  margin-top: 2rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+body.legal .site-footer {
+  width: min(40rem, 100%);
+  margin: 0 auto;
+  padding:
+    0.75rem
+    max(1rem, env(safe-area-inset-right))
+    max(1rem, env(safe-area-inset-bottom))
+    max(1rem, env(safe-area-inset-left));
+  border-top: 1px solid rgba(167, 139, 250, 0.35);
+}
